@@ -1,0 +1,20 @@
+[package]
+authors = ["BurntPizza <xburntpizza@gmail.com>"]
+name = "glimmer"
+version = "0.1.0"
+
+[[bin]]
+name = "glim"
+path = "src/main.rs"
+
+[dependencies]
+alga = "0.5.1"
+image = "0.14.0"
+nalgebra = "0.12.3"
+ncollide = "0.12.0"
+ord_subset = "2.0.0"
+rayon = "0.8.2"
+
+[lib]
+name = "glimmer"
+path = "src/lib.rs"
