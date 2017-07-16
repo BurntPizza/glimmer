@@ -4,8 +4,6 @@ extern crate rayon;
 extern crate image;
 extern crate glimmer;
 
-use std::any::Any;
-
 use na::*;
 use rayon::prelude::*;
 use image::{Rgb, RgbImage, Pixel};
@@ -31,7 +29,13 @@ fn main() {
     let l1 = PointLight::new(P3::new(-2.0, -2.0, -1.0), c3);
     let l2 = PointLight::new(P3::new(0.0, 5.0, -2.0), c3.map(|c| c * 0.5));
 
-    let scene = Scene::new(vec![x(a), x(b), x(c), x(d), x(l1), x(l2)]);
+    let mut scene = Scene::new();
+    scene.add(a);
+    scene.add(b);
+    scene.add(c);
+    scene.add(d);
+    scene.add_light(l1);
+    scene.add_light(l2);
 
     let mut image = RgbImage::new(w, h);
 
@@ -91,8 +95,4 @@ fn render(scene: &Scene, image: &mut RgbImage) {
             *(image.get_pixel(x, y) as *const _ as *mut _) = c;
         }
     })
-}
-
-fn x<T: 'static>(t: T) -> Box<Any> {
-    Box::new(t) as Box<Any>
 }

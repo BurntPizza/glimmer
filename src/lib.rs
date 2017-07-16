@@ -12,8 +12,6 @@ use na::{Point3, Vector3};
 use na::geometry::Isometry3;
 use nc::query::RayCast;
 
-use std::any::Any;
-
 pub type U = f32;
 pub type P3 = Point3<U>;
 pub type V3 = Vector3<U>;
@@ -26,26 +24,19 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn new<I>(iter: I) -> Self
-    where
-        I: IntoIterator<Item = Box<Any>>,
-    {
-        let mut spheres = vec![];
-        let mut lights = vec![];
-
-        for obj in iter {
-            if obj.is::<Sphere>() {
-                spheres.push(*obj.downcast().unwrap());
-                continue;
-            }
-            if obj.is::<PointLight>() {
-                lights.push(*obj.downcast().unwrap());
-                continue;
-            }
-            panic!();
+    pub fn new() -> Self {
+        Scene {
+            spheres: vec![],
+            lights: vec![],
         }
+    }
 
-        Scene { spheres, lights }
+    pub fn add(&mut self, obj: Sphere) {
+        self.spheres.push(obj);
+    }
+
+    pub fn add_light(&mut self, light: PointLight) {
+        self.lights.push(light);
     }
 
     pub fn cast_ray(&self, ray: &Ray) -> Option<Intersection> {
