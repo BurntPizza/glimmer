@@ -12,13 +12,9 @@ use image::{Rgb, RgbImage, Pixel};
 use glimmer::*;
 
 fn main() {
-    let w = 1280;
-    let h = 720;
-
     let c1 = Rgb { data: [0.7, 0.0, 0.0] };
     let c2 = Rgb { data: [0.2, 0.6, 0.2] };
     let c3 = Rgb { data: [0.9, 0.9, 0.9] };
-
 
     let m1 = Material::new(solid_texture(c1), 0.8, 0.0);
     let m2 = Material::new(solid_texture(c2), 0.8, 0.0);
@@ -63,10 +59,14 @@ fn main() {
         ));
     }
 
+    let w = 1280;
+    let h = 720;
+
     let mut image = RgbImage::from_fn(w, h, |_, _| Rgb { data: [0; 3] });
 
     render(&scene, &mut image);
 
+    // image = image::imageops::resize(&image, 1920, 1080, image::Lanczos3);
     image.save("/tmp/glim.png").unwrap();
 }
 
@@ -75,17 +75,43 @@ fn render(scene: &Scene, image: &mut RgbImage) {
     let h = image.height();
     let t = min(w, h) as U;
 
+    let m = 3.0 / 6.0;
+    let s = 1.5 / 6.0;
+    let aa_kernel = [(-0.5, s), (0.0, m), (0.5, s)];
+
+    // 3x3 kernel adds up to 1.0
+    assert_eq!(1.0, {
+        let mut acc = 0.0;
+        for &(_, yc) in aa_kernel.iter() {
+            for &(_, xc) in aa_kernel.iter() {
+                acc += xc * yc;
+            }
+        }
+        acc
+    });
+
     (0..h).into_par_iter().for_each(|y| {
         for x in 0..w {
-            let xt = (x as U - w as U * 0.5) / t;
-            let yt = (y as U - h as U * 0.5) / t;
-            let ray = Ray::new(P3::new(0.0, 0.0, 0.0), V3::new(xt, yt, 1.0).normalize());
+            let mut color = [0.0; 3];
 
-            let c = cast(&scene, &ray, 0);
+            for &(yo, ycoef) in aa_kernel.iter() {
+                for &(xo, xcoef) in aa_kernel.iter() {
+                    let xt = (x as U + xo - w as U * 0.5) / t;
+                    let yt = (y as U + yo - h as U * 0.5) / t;
+
+                    let ray = Ray::new(P3::new(0.0, 0.0, 0.0), V3::new(xt, yt, 1.0).normalize());
+                    let c = cast(&scene, &ray, 0);
+
+                    for i in 0..3 {
+                        color[i] += c[i] * xcoef * ycoef;
+                    }
+                }
+            }
+
             let mut data = [0; 3];
 
             for i in 0..3 {
-                data[i] = min((c[i] as U * 255.0) as u8, 255);
+                data[i] = min(255, (color[i] * 255.0) as u16) as u8;
             }
 
             // can't share image mutably between threads, so here's a hacked put_pixel:

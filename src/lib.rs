@@ -99,6 +99,15 @@ pub struct Material {
     pub reflectivity: U,
 }
 
+impl Material {
+    pub fn new(texture: Texture, diffuse_coef: U, reflectivity: U) -> Self {
+        Material {
+            texture,
+            diffuse_coef,
+            reflectivity,
+        }
+    }
+}
 
 impl ObjInfo {
     pub fn new(material: Material) -> Self {
@@ -140,15 +149,6 @@ pub struct Sphere {
     pos: P3,
     shape: nc::shape::Ball<U>,
     info: Arc<ObjInfo>,
-}
-impl Material {
-    pub fn new(texture: Texture, diffuse_coef: U, reflectivity: U) -> Self {
-        Material {
-            texture,
-            diffuse_coef,
-            reflectivity,
-        }
-    }
 }
 
 impl Sphere {
