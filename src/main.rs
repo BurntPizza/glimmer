@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use na::*;
 use rayon::prelude::*;
-use image::{Rgb, RgbImage, Pixel};
+use image::{Rgb, RgbImage};
 use glimmer::*;
 
 fn main() {
@@ -20,11 +20,13 @@ fn main() {
     let m2 = Material::new(solid_texture(c2), 0.8, 0.0);
     let m3 = Material::new(XOR_TEXTURE, 0.8, 0.0);
     let m4 = Material::new(solid_texture(c3), 0.2, 0.8);
+    let m5 = Material::new(NOISE_TEXTURE, 0.7, 0.0);
 
     let info1 = Arc::new(ObjInfo::new(m1));
     let info2 = Arc::new(ObjInfo::new(m2));
     let info3 = Arc::new(ObjInfo::new(m3));
     let info4 = Arc::new(ObjInfo::new(m4));
+    let info5 = Arc::new(ObjInfo::new(m5));
 
     let a = Sphere::new(P3::new(-1.5, 0.0, 1.0), 1.0, info1.clone());
     let b = Sphere::new(P3::new(0.0, 0.0, 3.0), 1.0, info2.clone());
@@ -32,15 +34,22 @@ fn main() {
     let d = Sphere::new(P3::new(3.0, 0.0, 3.0), 1.0, info4.clone());
 
     let l1 = PointLight::new(P3::new(-2.0, -2.0, -1.0), c3);
-    let l2 = PointLight::new(P3::new(0.0, 5.0, -2.0), c3.map(|c| c * 1.0));
+    let l2 = PointLight::new(P3::new(0.0, 5.0, -2.0), c3);
+
+    let p1 = Plane::new(
+        P3::new(0.0, 5.5, 9.0),
+        V3::new(0.0, -1.0, 0.0),
+        info5.clone(),
+    );
 
     let mut scene = Scene::new();
-    scene.add(a);
-    scene.add(b);
-    scene.add(c);
-    scene.add(d);
+    scene.add_sphere(a);
+    scene.add_sphere(b);
+    scene.add_sphere(c);
+    scene.add_sphere(d);
     scene.add_light(l1);
     scene.add_light(l2);
+    scene.add_plane(p1);
 
     let infos = [info1, info2, info3, info4];
     let n = 8;
@@ -48,7 +57,7 @@ fn main() {
     for i in 0..n {
         let x = ((i * 3562215327) ^ 463557371) + 3;
         let a = i as U / n as U + 0.03;
-        scene.add(Sphere::new(
+        scene.add_sphere(Sphere::new(
             P3::new(
                 (a * 3.14).cos() * r,
                 0.5,
@@ -66,7 +75,7 @@ fn main() {
 
     render(&scene, &mut image);
 
-    // image = image::imageops::resize(&image, 1920, 1080, image::Lanczos3);
+    // let image = image::imageops::resize(&image, 1920, 1080, image::Lanczos3);
     image.save("/tmp/glim.png").unwrap();
 }
 
