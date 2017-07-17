@@ -73,17 +73,18 @@ fn main() {
 fn render(scene: &Scene, image: &mut RgbImage) {
     let w = image.width();
     let h = image.height();
-    let t = min(w, h) as U;
+    let t = 1.0 / min(w, h) as U;
 
-    let m = 3.0 / 6.0;
-    let s = 1.5 / 6.0;
-    let aa_kernel = [(-0.5, s), (0.0, m), (0.5, s)];
+    let m = 0.5;
+    let s = 0.25;
+    let o = 0.4;
+    let aa_kernel = &[(-o, s), (0.0, m), (o, s)];
 
     // 3x3 kernel adds up to 1.0
     assert_eq!(1.0, {
         let mut acc = 0.0;
-        for &(_, yc) in aa_kernel.iter() {
-            for &(_, xc) in aa_kernel.iter() {
+        for &(_, yc) in aa_kernel {
+            for &(_, xc) in aa_kernel {
                 acc += xc * yc;
             }
         }
@@ -94,10 +95,10 @@ fn render(scene: &Scene, image: &mut RgbImage) {
         for x in 0..w {
             let mut color = [0.0; 3];
 
-            for &(yo, ycoef) in aa_kernel.iter() {
-                for &(xo, xcoef) in aa_kernel.iter() {
-                    let xt = (x as U + xo - w as U * 0.5) / t;
-                    let yt = (y as U + yo - h as U * 0.5) / t;
+            for &(yo, ycoef) in aa_kernel {
+                for &(xo, xcoef) in aa_kernel {
+                    let xt = (x as U + xo - w as U * 0.5) * t;
+                    let yt = (y as U + yo - h as U * 0.5) * t;
 
                     let ray = Ray::new(P3::new(0.0, 0.0, 0.0), V3::new(xt, yt, 1.0).normalize());
                     let c = cast(&scene, &ray, 0);
@@ -135,7 +136,7 @@ fn cast(scene: &Scene, ray: &Ray, depth: u8) -> Color {
             let lv = (light.pos - it.pos).normalize();
             let ldist2 = distance_squared(&light.pos, &it.pos);
             // lv * 0.0001 is a hack to avoid shadow ray colliding with the current object
-            let lray = Ray::new(it.pos + lv * 0.0001, lv);
+            let lray = Ray::new(it.pos + lv * 0.001, lv);
 
             if let Some(lit) = scene.cast_ray(&lray) {
                 if lit.dist * lit.dist <= ldist2 {
@@ -153,7 +154,7 @@ fn cast(scene: &Scene, ray: &Ray, depth: u8) -> Color {
         if depth < 3 && m.reflectivity != 0.0 {
             let v = ray.origin - it.pos;
             let r = (2.0 * dot(&it.norm, &v) * it.norm - v).normalize();
-            let ray = Ray::new(it.pos + r * 0.0001, r);
+            let ray = Ray::new(it.pos + r * 0.001, r);
             let c = cast(scene, &ray, depth + 1);
 
             for i in 0..3 {
