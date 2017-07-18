@@ -84,21 +84,14 @@ fn render(scene: &Scene, image: &mut RgbImage) {
     let h = image.height();
     let t = 1.0 / min(w, h) as U;
 
-    let m = 0.5;
-    let s = 0.25;
-    let o = 0.4;
-    let aa_kernel = &[(-o, s), (0.0, m), (o, s)];
+    // let m = 0.5;
+    // let s = 0.25;
+    // let o = 0.4;
+    // let aa_kernel = &[(-o, s), (0.0, m), (o, s)];
 
-    // 3x3 kernel adds up to 1.0
-    assert_eq!(1.0, {
-        let mut acc = 0.0;
-        for &(_, yc) in aa_kernel {
-            for &(_, xc) in aa_kernel {
-                acc += xc * yc;
-            }
-        }
-        acc
-    });
+    // 2x2 kernel
+    let o = 0.33333333;
+    let aa_kernel = &[(-o, 0.5), (o, 0.5)];
 
     (0..h).into_par_iter().for_each(|y| {
         for x in 0..w {
