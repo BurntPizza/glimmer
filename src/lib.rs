@@ -45,17 +45,30 @@ impl Scene {
         self.lights.push(light);
     }
 
+    #[inline(never)]
     pub fn cast_ray(&self, ray: &Ray) -> Option<Intersection> {
-        self.spheres
-            .iter()
-            .filter_map(|obj| obj.intersection(ray))
-            .chain(self.planes.iter().filter_map(|obj| obj.intersection(ray)))
-            .ord_subset_min_by_key(|i| i.dist)
+        let csh = iter_objects(&*self.spheres, ray);
+        let cph = iter_objects(&*self.planes, ray);
+
+        let it = match (cph, csh) {
+            (Some(a), Some(b)) => if a.dist2 <= b.dist2 { Some(a) } else { Some(b) },
+            (None, b) => b,
+            (a, None) => a,
+        };
+
+        // defer as much work as possible
+        it.map(|hit| hit.to_intersection())
     }
 
     pub fn lights(&self) -> &[PointLight] {
         &*self.lights
     }
+}
+
+fn iter_objects<'a, O: Object>(objs: &'a [O], ray: &Ray) -> Option<Hit<'a>> {
+    objs.iter()
+        .filter_map(|obj| obj.hit_test(ray))
+        .ord_subset_min_by_key(|hit| hit.dist2)
 }
 
 pub struct PointLight {
@@ -81,8 +94,29 @@ pub struct Intersection<'a> {
     pub uv: P2,
 }
 
+pub struct Hit<'a> {
+    info: &'a ObjInfo,
+    pos: P3,
+    dist2: U,
+    norm: V3,
+    uv_fn: fn(P3, V3) -> P2,
+}
+
+impl<'a> Hit<'a> {
+    #[inline]
+    fn to_intersection(self) -> Intersection<'a> {
+        Intersection {
+            pos: self.pos,
+            norm: self.norm,
+            info: self.info,
+            dist: self.dist2.sqrt(),
+            uv: (self.uv_fn)(self.pos, self.norm),
+        }
+    }
+}
+
 pub trait Object {
-    fn intersection(&self, ray: &Ray) -> Option<Intersection>;
+    fn hit_test(&self, ray: &Ray) -> Option<Hit>;
     fn info(&self) -> &ObjInfo;
 }
 
@@ -182,11 +216,7 @@ pub struct Sphere {
 
 impl Sphere {
     pub fn new(pos: P3, radius: U, info: Arc<ObjInfo>) -> Self {
-        Sphere {
-            pos,
-            radius,
-            info,
-        }
+        Sphere { pos, radius, info }
     }
 }
 
@@ -207,7 +237,8 @@ impl Plane {
 }
 
 impl Object for Sphere {
-    fn intersection(&self, ray: &Ray) -> Option<Intersection> {
+    #[inline]
+    fn hit_test(&self, ray: &Ray) -> Option<Hit> {
         let radius = self.radius;
         let p = ray.origin - self.pos;
         let p_d = na::dot(&p, &ray.dir);
@@ -225,18 +256,12 @@ impl Object for Sphere {
         let intersection = self.pos + i;
         let normal = i / radius;
 
-        let pi = std::f32::consts::PI;
-        let rpi = 1.0 / pi;
-        let hp = 1.0 / (pi * 2.0);
-        let u = 0.5 + normal[2].atan2(normal[0]) * hp;
-        let v = 0.5 - normal[1].asin() * rpi;
-
-        return Some(Intersection {
-            uv: P2::new(u, v),
-            pos: intersection,
+        return Some(Hit {
             norm: normal,
             info: self.info(),
-            dist: na::distance(&ray.origin, &intersection),
+            pos: intersection,
+            dist2: na::distance_squared(&intersection, &ray.origin),
+            uv_fn: sphere_uv,
         });
     }
 
@@ -246,27 +271,22 @@ impl Object for Sphere {
 }
 
 impl Object for Plane {
-    fn intersection(&self, ray: &Ray) -> Option<Intersection> {
+    #[inline]
+    fn hit_test(&self, ray: &Ray) -> Option<Hit> {
         let denom = na::dot(&ray.dir, &self.normal);
         if denom != 0.0 {
             let d = na::dot(&(self.center - ray.origin), &self.normal) / denom;
             if d >= 0.0 {
                 let pos = ray.origin + ray.dir * d;
-                let pc = pos.coordinates();
-                let v0 = V3::new(1.0, 0.0, 0.0);
-                let v1 = self.normal.cross(&v0);
-                let v2 = self.normal.cross(&v1);
-                let u = na::dot(&v1, &pc) * (1.0 / 8.0);
-                let v = na::dot(&v2, &pc) * (1.0 / 8.0);
-                let uv = P2::new(u, v);
-                let it = Intersection {
+
+                let hit = Hit {
                     norm: self.normal,
                     pos,
-                    dist: d,
+                    dist2: d * d,
                     info: self.info(),
-                    uv,
+                    uv_fn: plane_uv,
                 };
-                return Some(it);
+                return Some(hit);
             }
         }
         // parallel (considering contained in plane as not an intersection)
@@ -279,9 +299,9 @@ impl Object for Plane {
 }
 
 impl<'a> Object for ObjRef<'a> {
-    fn intersection(&self, ray: &Ray) -> Option<Intersection> {
+    fn hit_test(&self, ray: &Ray) -> Option<Hit> {
         match *self {
-            ObjRef::Sphere(ref s) => s.intersection(ray),
+            ObjRef::Sphere(ref s) => s.hit_test(ray),
         }
     }
 
@@ -290,4 +310,25 @@ impl<'a> Object for ObjRef<'a> {
             ObjRef::Sphere(ref s) => s.info(),
         }
     }
+}
+
+#[inline]
+fn sphere_uv(_pos: P3, norm: V3) -> P2 {
+    let pi = std::f32::consts::PI;
+    let rpi = 1.0 / pi;
+    let hp = 1.0 / (pi * 2.0);
+    let u = 0.5 + norm[2].atan2(norm[0]) * hp;
+    let v = 0.5 - norm[1].asin() * rpi;
+    P2::new(u, v)
+}
+
+#[inline]
+fn plane_uv(pos: P3, norm: V3) -> P2 {
+    let pc = pos.coordinates();
+    let v0 = V3::new(1.0, 0.0, 0.0);
+    let v1 = norm.cross(&v0);
+    let v2 = norm.cross(&v1);
+    let u = na::dot(&v1, &pc) * (1.0 / 8.0);
+    let v = na::dot(&v2, &pc) * (1.0 / 8.0);
+    P2::new(u, v)
 }
